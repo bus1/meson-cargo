@@ -1,0 +1,54 @@
+#
+# Test Suite
+#
+# This workflow runs all the unittests and integration tests to ensure the
+# project works as intended.
+#
+
+name: "Test Suite"
+
+on:
+  pull_request:
+  push:
+    branches-ignore: ["pr/**"]
+    tags: ["**"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: "bash"
+
+jobs:
+  tests:
+    name: "Basic Test"
+    container:
+      image: "ghcr.io/bus1/ci-c-util:latest"
+    runs-on: "ubuntu-latest"
+
+    steps:
+    - name: "Fetch Sources"
+      uses: actions/checkout@v3
+
+    - name: "Prepare Build"
+      working-directory: "./test/basic/"
+      run: meson setup build
+
+    - name: "Run Build"
+      working-directory: "./test/basic/"
+      run: meson compile -v -C build
+
+    - name: "Run Meson Tests"
+      working-directory: "./test/basic/"
+      run: meson test -v -C build
+
+    - name: "Run Dist"
+      working-directory: "./test/basic/"
+      run: meson dist -C build --include-subprojects
+
+    - name: "Build Cargo Targets"
+      working-directory: "./test/basic/"
+      run: cargo build --verbose --all-targets
+
+    - name: "Run Cargo Tests"
+      working-directory: "./test/basic/"
+      run: cargo test --verbose

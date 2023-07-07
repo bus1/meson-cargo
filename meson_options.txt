@@ -1,0 +1,25 @@
+option(
+        'profile',
+        description: 'Cargo profile',
+        type: 'string',
+        value: '',
+)
+option(
+        'target',
+        description: 'Rust target triple',
+        type: 'string',
+        value: '',
+)
+option(
+        'vendor',
+        choices: ['yes', 'no', 'auto'],
+        description: 'Use vendored cargo dependencies',
+        type: 'combo',
+        value: 'auto',
+)
+option(
+        'vendordir',
+        description: 'Relative path to root source directory for vendored cargo dependencies',
+        type: 'string',
+        value: 'subprojects/cargo-vendor',
+)
