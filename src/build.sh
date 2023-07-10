@@ -94,7 +94,7 @@ if [[ ${_MCARGO_LIB_USED} == "yes" ]] ; then
                 ${MCARGO_BIN_CARGO} \
                         rustc \
                                 --manifest-path "${MCARGO_MANIFEST_PATH}" \
-                                --message-format=json \
+                                --message-format=json-render-diagnostics \
                                 --target-dir "${MCARGO_TARGET_DIR}" \
                                 "${_MCARGO_LIB_ARGS[@]}" \
         )
@@ -106,7 +106,7 @@ if [[ ${_MCARGO_DEF_USED} == "yes" ]] ; then
                 ${MCARGO_BIN_CARGO} \
                         rustc \
                                 --manifest-path "${MCARGO_MANIFEST_PATH}" \
-                                --message-format=json \
+                                --message-format=json-render-diagnostics \
                                 --target-dir "${MCARGO_TARGET_DIR}" \
                                 "${_MCARGO_DEF_ARGS[@]}" \
         )
