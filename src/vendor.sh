@@ -51,3 +51,5 @@ ${MCARGO_BIN_CARGO} \
                 "${MCARGO_VENDOR_DIR}" \
                 >/dev/null
 echo >&2 "(Cargo configuration output suppressed)"
+
+exit 0

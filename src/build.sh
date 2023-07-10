@@ -141,3 +141,5 @@ done <<<"${_MCARGO_DEF_FILES}"
 while IFS= read -r line ; do
         [[ -n ${line} ]] && ${MCARGO_BIN_CP} "$(${MCARGO_BIN_JQ} -r . <<<"${line}")" "${MCARGO_OUTPUT_DIR}/"
 done <<<"${_MCARGO_LIB_FILES}"
+
+exit 0

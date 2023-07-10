@@ -50,3 +50,5 @@ ${MCARGO_BIN_CARGO} \
                 "${MESON_DIST_ROOT}/${MCARGO_VENDOR_DIR}" \
                 >/dev/null
 echo >&2 "(Cargo configuration output suppressed)"
+
+exit 0
