@@ -25,6 +25,7 @@ MCARGO_OFFLINE=${MCARGO_OFFLINE:-"no"}
 MCARGO_PROFILE=${MCARGO_PROFILE:-""}
 MCARGO_TARGET=${MCARGO_TARGET:-""}
 MCARGO_TARGET_DIR=${MCARGO_TARGET_DIR:-""}
+MCARGO_TARGETS=${MCARGO_TARGETS:-"--lib"}
 MCARGO_VENDOR_DIR=${MCARGO_VENDOR_DIR:-"."}
 
 MCARGO_OUTPUT_DIR=${1}
@@ -42,6 +43,8 @@ failexit() { printf "==> ERROR: $1\n" "${@:2}"; exit 1; } >&2
 
 if [[ -z ${MCARGO_TARGET_DIR} ]] ; then
         failexit '%s: missing target directory directive' "${0##*/}"
+elif [[ -z ${MCARGO_TARGETS} ]] ; then
+        failexit '%s: missing target selection argument' "${0##*/}"
 elif [[ -z ${MCARGO_OUTPUT_DIR} ]] ; then
         failexit '%s: missing output directory argument' "${0##*/}"
 elif [[ -z ${MCARGO_MANIFEST_PATH} ]] ; then
@@ -49,32 +52,65 @@ elif [[ -z ${MCARGO_MANIFEST_PATH} ]] ; then
 fi
 
 #
-# Run Cargo-Build
+# Run Cargo Build
 #
-# Run `cargo build` with all specified parameters. Use `--message-format=json`
+# Run `cargo rustc` with all specified parameters. Use `--message-format=json`
 # to get formatted output from the build, which we can later parse.
 #
 # If offline mode is requested, we use vendored sources as specified by the
 # caller. Usually, this requires the caller to invoke `vendor.sh` or
 # `cargo-vendor` before.
 #
+# Since `--crate-type` cannot be used when building anything but `--lib`, we
+# have to invoke Cargo twice if it is used with other targets.
+#
 
-_MCARGO_ARGS=()
-[[ -z ${MCARGO_CRATE_TYPE} ]] || _MCARGO_ARGS+=("--crate-type=${MCARGO_CRATE_TYPE}")
-[[ ${MCARGO_OFFLINE} == "no" ]] || _MCARGO_ARGS+=("--offline")
-[[ ${MCARGO_OFFLINE} == "no" ]] || _MCARGO_ARGS+=("--config=source.crates-io.replace-with=\"vendored-sources\"")
-[[ ${MCARGO_OFFLINE} == "no" ]] || _MCARGO_ARGS+=("--config=source.vendored-sources.directory=\"${MCARGO_VENDOR_DIR}\"")
-[[ -z ${MCARGO_PROFILE} ]] || _MCARGO_ARGS+=("--profile=${MCARGO_PROFILE}")
-[[ -z ${MCARGO_TARGET} ]] || _MCARGO_ARGS+=("--target=${MCARGO_TARGET}")
+_MCARGO_DEF_USED="no"
+_MCARGO_DEF_ARGS=()
+[[ ${MCARGO_OFFLINE} == "no" ]] || _MCARGO_DEF_ARGS+=("--offline")
+[[ ${MCARGO_OFFLINE} == "no" ]] || _MCARGO_DEF_ARGS+=("--config=source.crates-io.replace-with=\"vendored-sources\"")
+[[ ${MCARGO_OFFLINE} == "no" ]] || _MCARGO_DEF_ARGS+=("--config=source.vendored-sources.directory=\"${MCARGO_VENDOR_DIR}\"")
+[[ -z ${MCARGO_PROFILE} ]] || _MCARGO_DEF_ARGS+=("--profile=${MCARGO_PROFILE}")
+[[ -z ${MCARGO_TARGET} ]] || _MCARGO_DEF_ARGS+=("--target=${MCARGO_TARGET}")
 
-_MCARGO_JSON=$( \
-        ${MCARGO_BIN_CARGO} \
-                rustc \
-                        --manifest-path "${MCARGO_MANIFEST_PATH}" \
-                        --message-format=json \
-                        --target-dir "${MCARGO_TARGET_DIR}" \
-                        "${_MCARGO_ARGS[@]}" \
-)
+_MCARGO_LIB_USED="no"
+_MCARGO_LIB_ARGS=("${_MCARGO_DEF_ARGS[@]}")
+[[ -z ${MCARGO_CRATE_TYPE} ]] || _MCARGO_LIB_ARGS+=("--crate-type=${MCARGO_CRATE_TYPE}")
+
+IFS=',' read -r -a _MCARGO_TARGETS <<< "${MCARGO_TARGETS}"
+for target in "${_MCARGO_TARGETS[@]}" ; do
+        if [[ ${target} == "--lib" ]] ; then
+                _MCARGO_LIB_USED="yes"
+                _MCARGO_LIB_ARGS+=("${target}")
+        else
+                _MCARGO_DEF_USED="yes"
+                _MCARGO_DEF_ARGS+=("${target}")
+        fi
+done
+
+_MCARGO_LIB_JSON="{}"
+if [[ ${_MCARGO_LIB_USED} == "yes" ]] ; then
+        _MCARGO_LIB_JSON=$( \
+                ${MCARGO_BIN_CARGO} \
+                        rustc \
+                                --manifest-path "${MCARGO_MANIFEST_PATH}" \
+                                --message-format=json \
+                                --target-dir "${MCARGO_TARGET_DIR}" \
+                                "${_MCARGO_LIB_ARGS[@]}" \
+        )
+fi
+
+_MCARGO_DEF_JSON="{}"
+if [[ ${_MCARGO_DEF_USED} == "yes" ]] ; then
+        _MCARGO_DEF_JSON=$( \
+                ${MCARGO_BIN_CARGO} \
+                        rustc \
+                                --manifest-path "${MCARGO_MANIFEST_PATH}" \
+                                --message-format=json \
+                                --target-dir "${MCARGO_TARGET_DIR}" \
+                                "${_MCARGO_DEF_ARGS[@]}" \
+        )
+fi
 
 #
 # Copy Artifacts
@@ -95,8 +131,13 @@ _MCARGO_FILTER+='  )'
 _MCARGO_FILTER+=')'
 _MCARGO_FILTER+='| .[].filenames[]'
 
-_MCARGO_FILES=$(${MCARGO_BIN_JQ} --slurp "${_MCARGO_FILTER}" <<<"${_MCARGO_JSON}")
+_MCARGO_DEF_FILES=$(${MCARGO_BIN_JQ} --slurp "${_MCARGO_FILTER}" <<<"${_MCARGO_DEF_JSON}")
+_MCARGO_LIB_FILES=$(${MCARGO_BIN_JQ} --slurp "${_MCARGO_FILTER}" <<<"${_MCARGO_LIB_JSON}")
 
 while IFS= read -r line ; do
-        ${MCARGO_BIN_CP} "$(${MCARGO_BIN_JQ} -r . <<<"${line}")" "${MCARGO_OUTPUT_DIR}/"
-done <<<"${_MCARGO_FILES}"
+        [[ -n ${line} ]] && ${MCARGO_BIN_CP} "$(${MCARGO_BIN_JQ} -r . <<<"${line}")" "${MCARGO_OUTPUT_DIR}/"
+done <<<"${_MCARGO_DEF_FILES}"
+
+while IFS= read -r line ; do
+        [[ -n ${line} ]] && ${MCARGO_BIN_CP} "$(${MCARGO_BIN_JQ} -r . <<<"${line}")" "${MCARGO_OUTPUT_DIR}/"
+done <<<"${_MCARGO_LIB_FILES}"
