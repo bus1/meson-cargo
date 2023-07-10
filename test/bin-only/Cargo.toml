@@ -1,0 +1,13 @@
+[package]
+name = "rlib"
+version = "1.0.0"
+
+description = "Internal Rust Library"
+edition = "2021"
+license = "MIT OR Apache-2.0 OR LGPL-2.1-or-later"
+publish = false
+rust-version = "1.64"
+
+[[bin]]
+name = "rbin"
+path = "rbin.rs"
